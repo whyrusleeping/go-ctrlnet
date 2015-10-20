@@ -2,6 +2,7 @@ package ctrlnet
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os/exec"
 	"strings"
 )
@@ -62,4 +63,18 @@ func SetLink(name string, settings *LinkSettings) error {
 	}
 
 	return nil
+}
+
+func GetInterfaces(filter string) ([]string, error) {
+	ifs, err := ioutil.ReadDir("/sys/devices/virtual/net")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, i := range ifs {
+		if strings.Contains(i.Name(), filter) {
+			out = append(out, i.Name())
+		}
+	}
+	return out, nil
 }
