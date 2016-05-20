@@ -14,8 +14,13 @@ type LinkSettings struct {
 	PacketLoss int
 }
 
-func (ls *LinkSettings) cmd(iface string) []string {
-	base := []string{"tc", "qdisc", "change", "dev", iface, "root", "netem"}
+func (ls *LinkSettings) cmd(iface string, init bool) []string {
+	var cmd = "change"
+	if init {
+		cmd = "add"
+	}
+
+	base := []string{"tc", "qdisc", cmd, "dev", iface, "root", "netem"}
 
 	// even if latency is zero, put it on so the command never fails
 	base = append(base, "delay", fmt.Sprintf("%dms", ls.Latency))
@@ -34,28 +39,28 @@ func (ls *LinkSettings) cmd(iface string) []string {
 	return base
 }
 
-func initLink(name string) error {
+func initLink(name string) (bool, error) {
 	out, err := exec.Command("tc", "qdisc", "show").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("dev listing failed: %s - %s", string(out), err)
+		return false, fmt.Errorf("dev listing failed: %s - %s", string(out), err)
 	}
 
 	lines := strings.Split(string(out), "\n")
 	for _, l := range lines {
-		if strings.Contains(l, name) {
-			return nil
+		if strings.Contains(l, name) && strings.Contains(l, "netem") {
+			return false, nil
 		}
 	}
 
-	return SetLink(name, new(LinkSettings))
+	return true, nil
 }
 
 func SetLink(name string, settings *LinkSettings) error {
-	err := initLink(name)
+	doinit, err := initLink(name)
 	if err != nil {
 		return err
 	}
-	args := settings.cmd(name)
+	args := settings.cmd(name, doinit)
 	c := exec.Command(args[0], args[1:]...)
 	out, err := c.CombinedOutput()
 	if err != nil {
