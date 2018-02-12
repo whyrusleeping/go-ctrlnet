@@ -8,9 +8,16 @@ import (
 )
 
 type LinkSettings struct {
+	// Latency between links (in milliseconds)
 	Latency    int
+	
+	// Jitter in latency values (in milliseconds)
 	Jitter     int
+	
+	// Bandwidth of link (in bits per second)
 	Bandwidth  int
+	
+	// PacketLoss percentage on the links (in whole percentage points)
 	PacketLoss int
 }
 
