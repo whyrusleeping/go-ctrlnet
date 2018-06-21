@@ -17,6 +17,9 @@ type LinkSettings struct {
 	// Bandwidth of link (in bits per second)
 	Bandwidth uint
 
+	// Upload bandwidth
+	Upload uint
+
 	// PacketLoss percentage on the links (in whole percentage points)
 	PacketLoss uint8
 }
@@ -44,6 +47,39 @@ func (ls *LinkSettings) cmd(iface string, init bool) []string {
 	}
 
 	return base
+}
+
+func SetHTB(iface string, settings *LinkSettings) error {
+	doinit, err := initLink(iface)
+	if err != nil {
+		return err
+	}
+	var cmd = "change"
+	if doinit {
+		cmd = "add"
+	}
+
+	configureparent := []string{"tc", "qdisc", cmd, "dev", iface, "root", "handle", "1:", "htb", "default", "20"}
+	out, err := exec.Command(configureparent[0], configureparent[1:]...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error configuring parent qdisc: %s - %s", string(out), err)
+	}
+
+	setupload := []string{"tc", "class", cmd, "dev", iface, "parent", "1:", "classid", "1:1", "htb"}
+	if settings.Upload != 0 {
+		setupload = append(setupload, "rate", fmt.Sprint(settings.Upload), "ceil", fmt.Sprint(settings.Upload))
+	}
+	out, err = exec.Command(setupload[0], setupload[1:]...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error setting upload bandwidth: %s - %s", string(out), err)
+	}
+
+	out, err = exec.Command("tc", "filter", "add", "dev", iface, "protocol", "ip", "parent", "1:", "prio", "1", "matchall", "flowid", "1:1").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error configuring class filter: %s - %s", string(out), err)
+	}
+
+	return nil
 }
 
 func initLink(name string) (bool, error) {
